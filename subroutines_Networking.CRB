@@ -1,0 +1,23 @@
+'Function takes in pointers to two variables -- a success flag and a filename
+'Attempts to upload file to Seagull using API configuration stored in config file
+'Success flag will be updated
+Function uploadJSONToSeagull(_uploadCandidateUploadSuccessful As Long!, _uploadCandidateFileName As String)
+  
+  'Set local variables (http, and json file stuff)
+  Dim _uploadCandidateFileHandle As Long = 0
+
+  'Erase things
+  http_header = Trim(SEAGULL_API_KEY_PREFIX & SEAGULL_API_KEY)
+  Erase(jsonUpldStr)
+  
+  'Read the file
+  _uploadCandidateFileHandle = FileOpen(_uploadCandidateFileName,"r+",0)
+  FileRead(_uploadCandidateFileHandle,jsonUpldStr,JSON_MAX_CHAR_SIZE)
+  FileClose(_uploadCandidateFileHandle)
+  'jsonUpldStr = Trim(jsonUpldStr)
+
+  'Upload the data to Seagull API & check if it was successful
+  http_socket = HTTPPost(SEAGULL_API_ENDPOINT_URL,jsonUpldStr,http_post_response,http_header,,,,,FILE_UPLOAD_TIMEOUT)
+  !_uploadCandidateUploadSuccessful = InStr(1, http_post_response, SEAGULL_API_SUCCESS_STRING, 2) 'OBVIOUSLY DO SOMETHING HERE!
+  
+EndSub

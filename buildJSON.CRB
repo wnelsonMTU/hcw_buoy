@@ -1,0 +1,74 @@
+'Program writes data to a .json file on a GLRC Environmental Monitoring Bouys (Enbridge) -- GLRC 2025
+'WHN
+'Last Modified: 2025.02.17 -- 03:06EST (WHN)
+
+'Desired ouput format for GLOS Seagull API is a JSON formatted data object. For our purposes we need a string with JSON formatting
+'Here is an example:
+'
+'data_obj =  [
+'    {
+'        "id": "YOURBUOYID",
+'        "id_type": "org",
+'        "timestamp": 1606089600, (unix timestamp)
+'        "observations": [
+'            {
+'                "variable_name": "mass_concentration_of_oxygen_in_sea_water",
+'                "value": 13.97
+'            },
+'            {
+'                "variable_name": "fractional_saturation_of_oxygen_in_sea_water",
+'                "value": 122.88
+'            },
+'            {
+'                "variable_name": "sea_surface_temperature",
+'                "value": 282.742
+'            },
+'            {
+'                "variable_name": "sea_water_electrical_conductivity",
+'                "value": 0.07779
+'            },
+'            {
+'                "variable_name": "sea_water_turbidity",
+'                "value": 4.87
+'            },
+'            {
+'                "variable_name": "sea_water_ph_reported_on_total_scale",
+'                "value": 8.43
+'            }
+'        ]
+'    }
+']
+
+
+'Open the correct file
+'Reset variables (these are declared in the main program)
+fileWriteHandle = 0
+filePrintString  = ""
+'Generate filename (prefix with a so that these appear first when reading data from the card)
+Sprintf(jsonFileWriteName,"CPU:%d.json",jsonWriteTimestampUNIX)
+'Open file (overwrite contents)
+fileWriteHandle = FileOpen(jsonFileWriteName, "w+", 0)
+
+'Make header & print to file
+'Genrate the string. It will look like: [{"id":"YOURBUOYID","id_type":"org","timestamp":1606089600,"observations":[
+'Note that these are the first 6 rows of the example format given at the top of this file
+  filePrintString = "[{" & _
+  CHR(34) & "id" & CHR(34) & ":" & CHR(34) & StationNumber & CHR(34) & "," & _
+  CHR(34) & "id_type" & CHR(34) & ":" & CHR(34) & "org" & CHR(34) & "," & _
+  CHR(34) & "timestamp" & CHR(34) & ":" & jsonWriteTimestampUNIX & "," & _
+  CHR(34) & "observations" & CHR(34) & ":["
+FileWrite(fileWriteHandle, filePrintString, 0)
+
+'Format and print weather station data
+PrintObsToJSON(SeagullDataTable.WindDir_deg,        "wind_from_direction",         filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.WindSpeed_mps,          "wind_speed",             filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.AirTemp_C + 273.15,     "air_temperature",        filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.RelHumidity,   "relative_humidity",      filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.BaroPressure_kPa*100, "air_pressure_at_mean_sea_level",    filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.SolarRadiation,     "surface_downwelling_shortwave_flux_in_air",        filePrintString, fileWriteHandle)
+
+'Print ending sequence to close off all brackets
+FileWrite(fileWriteHandle,"]}]",0)
+
+'Close file
+FileClose(fileWriteHandle)

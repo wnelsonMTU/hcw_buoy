@@ -1,0 +1,40 @@
+'Subroutines and helper functions for formatting and writing JSON data -- GLRC 2025
+'WHN & ChatGPT (thanks hoss)
+'Last Modified: 2025.02.17 -- 03:06EST (WHN)
+
+'-----------------------------------------------------------------------
+' Function BuildDataJSON
+'   Accepts a variable name (string) and a numeric value (float)
+'   Returns a JSON-like string of the form:
+'       {"variable_name":"<varName>","value":<varValue>},
+'
+' Example usage:
+'    resultString = BuildDataJSON("m11_do_percent", Benthic_water.m11_do_percent)
+'
+'-----------------------------------------------------------------------
+Sub PrintObsToJSON(varValue As Float, varName As String * 64, _printString As String *1024, _fileHandle As Long, Optional includeComma As Boolean = true)
+    
+    ' Build the text in a single line using Sprintf.
+    ' CHR(34) = "  (double quote)
+    ' CHR(123) = {, CHR(125) = }, CHR(58) = :, CHR(44) = ,
+    ' For clarity, this example uses placeholders in Sprintf
+    ' and inserts numeric or string values accordingly.
+    
+    Erase(JsonNodeString)
+
+    If varValue = NAN
+        JsonNodeString = "-9999"
+    Else
+        sprintf(JsonNodeString,"%Lg",varValue)
+    EndIf
+    
+    _printString = "{" & CHR(34) & "variable_name" & CHR(34) & ":" & CHR(34) & varName & CHR(34) & "," & CHR(34) & "value" & CHR(34) & ":" & JsonNodeString & "}"    
+  
+    If includeComma
+        _printString = _printString + ","
+    EndIf
+
+    'Print the string into our file
+    FileWrite(_fileHandle,_printString,0)
+  
+EndFunction

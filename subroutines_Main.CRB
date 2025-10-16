@@ -1,0 +1,23 @@
+Sub print(message As String * 256, Optional linenumber As Long = 0, Optional dontPrintDebugMessage As Boolean = true)
+  
+  If dontPrintDebugMessage = true Then
+    RealTime(realTimeVar)
+    Dim _lineString As String * 16
+    Dim _m As Long = 0
+    For _m = BUOY_HISTORY_SIZE To 2 Step -1
+      buoyDebugMessages(_m) = buoyDebugMessages(_m - 1)
+    Next _m
+
+    Sprintf(_lineString, "Line: %d", linenumber)
+    Sprintf(buoyDebugMessages(1), "%u-%u %02u:%02u:%02u   %s %s", Month, DOM, Hour, Minute, Second, message, IIF(linenumber <> 0, _lineString, ""))
+    CallTable(BuoyMessages)
+    
+    If writeDebugToLogFile
+      logFileHandle = FileOpen("CPU:buoyLog.txt", "a+", -1)
+      FileWrite(logFileHandle,buoyDebugMessages(1) & CHR(13),0)
+      FileClose(logFileHandle)
+    EndIf
+
+  EndIf
+
+EndSub

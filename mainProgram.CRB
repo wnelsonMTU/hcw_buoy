@@ -1,0 +1,218 @@
+'******************
+'CONST DEFINITIONS:
+'******************
+
+'Program configuration:
+Const DEBUG_MODE_ENABLED = True
+Const DATA_REPORTING_INTERVAL_MIN = 20
+Const UNIX_TIME_SETTING = 0 'Set to 1 for 1990, set to 0 since 1970'
+Const StationNumber = "45025"
+
+'Seagull API:
+#If DEBUG_MODE_ENABLED
+  Const SEAGULL_API_ENDPOINT_URL = "https://staging-seagull-api.glos.org/api/v1/obs"
+  Const SEAGULL_API_KEY = "soc-60eccd3f-0426-4f3d-9861-917232335cb2"
+#Else
+  Const SEAGULL_API_ENDPOINT_URL = "https://seagull-api.glos.org/api/v1/obs"
+  Const SEAGULL_API_KEY = "soc-4261f031-7ab8-4922-8947-527fbde2237a"
+#EndIf
+Const SEAGULL_API_KEY_PREFIX = "X-API-KEY: "
+Const SEAGULL_API_SUCCESS_STRING = "{" & CHR(34) & "success" & CHR(34) & ":true}"   '{"success":true}
+Const FILE_UPLOAD_TIMEOUT = 4500
+
+'JSON:
+Const JSON_MAX_CHAR_SIZE = 512
+
+'Debug Messages:
+Const BUOY_HISTORY_SIZE = 16
+
+
+'*********************
+'VARIABLE DEFINITIONS:
+'*********************
+
+'Weather station data; plus aliases
+Public WS800_Data(10) As Float
+Alias WS800_Data(1) = AirTemp_C
+Alias WS800_Data(2) = RelHumidity
+Alias WS800_Data(3) = BaroPressure_kPa
+Alias WS800_Data(4) = WindSpeed_mps
+Alias WS800_Data(6) = WindDir_deg
+Alias WS800_Data(9) = Precip_mm
+Alias WS800_Data(7) = SolarRadiation
+
+Public WS800_Data_2(10) As Float
+Alias WS800_Data_2(1) = _SolarRadiation
+
+'Program control variables:
+Public programCtrlFlags(8) As Boolean = {False}
+Alias programCtrlFlags(1) = inStartup
+Alias programCtrlFlags(2) = firstReportingInterval
+Alias programCtrlFlags(3) = endReportingInterval
+Alias programCtrlFlags(4) = newReportingInterval
+Alias programCtrlFlags(5) = compilingSeagullAvg
+Alias programCtrlFlags(6) = seagullTableAveragingDone
+Alias programCtrlFlags(7) = jsonReadyForUpload
+Alias programCtrlFlags(8) = jsonUploadSuccessful
+
+'Debug messages
+Public writeDebugToLogFile As Boolean = True
+Dim logFileHandle As Long
+Dim buoyDebugMessages(BUOY_HISTORY_SIZE) As String * 128 = ""
+
+'Timing variables:
+Public DataTimestampUNIX As Long
+Public jsonWriteTimestampUNIX As Long
+'Real-time clock reading from MCU:
+Dim realTimeVar(9) As Long           'declare as public and dimension rTime to 9
+Alias realTimeVar(1) = Year          'assign the alias Year to rTime(1)
+Alias realTimeVar(2) = Month         'assign the alias Month to rTime(2)
+Alias realTimeVar(3) = DOM           'assign the alias DOM to rTime(3)
+Alias realTimeVar(4) = Hour          'assign the alias Hour to rTime(4)
+Alias realTimeVar(5) = Minute        'assign the alias Minute to rTime(5)
+Alias realTimeVar(6) = Second        'assign the alias Second to rTime(6)
+Alias realTimeVar(7) = uSecond       'assign the alias uSecond to rTime(7)
+Alias realTimeVar(8) = WeekDay       'assign the alias WeekDay to rTime(8)
+Alias realTimeVar(9) = DayofYear     'assign the alias Day_of_Year to rTime(9)
+
+'JSON variables:
+Public fileWriteHandle = 0
+Public jsonFileWriteName As String * 32 = ""
+Public JsonNodeString As String * 16 = ""
+Public filePrintString As String * 128 = ""
+Public jsonUpldStr As String * JSON_MAX_CHAR_SIZE = ""
+
+'Network variables:
+Public http_header As String * 64 = ""
+Public http_post_response As String * 512 = ""
+Public http_socket As Long = 0
+
+'******************
+'TABLE DEFINITIONS:
+'******************
+'MQTT publishing data table
+DataTable (WSData,1,50)
+  DataInterval (0,10,Sec,10)
+  Sample (10,WS800_Data,FP2)
+  MQTTPublishTable(0,1,0,Sec,1)
+EndTable
+
+'Seagull publishing data table
+DataTable (SeagullDataTable,1,-1)
+  'Wind
+  Sample(1,WindSpeed_mps,Float)
+  FieldNames("WindSpeed_mps: Wind Speed")
+  Sample(1,WindDir_deg,Float)
+  FieldNames("WindDir_deg: Wind Direction")
+  'Atmospheric
+  Average(1,AirTemp_C,Float,AirTemp_C=NAN)
+  FieldNames("AirTemp_C: Air Temp")
+  Average(1,RelHumidity,Float,RelHumidity=NAN)
+  FieldNames("RelHumidity: Relative Humidity")
+  Average(1,BaroPressure_kPa,Float,BaroPressure_kPa=NAN)
+  FieldNames("BaroPressure_kPa: Barometric Pressure")
+  Average(1,SolarRadiation,Float,SolarRadiation=NAN)
+  FieldNames("SolarRadiation: Solar Radiation")
+  Average(1,Precip_mm,Float,Precip_mm=NAN)
+  FieldNames("Precip_mm: Precipitation Amount")
+EndTable
+'Debugging table
+DataTable(BuoyMessages, True, BUOY_HISTORY_SIZE)
+  Sample(BUOY_HISTORY_SIZE,buoyDebugMessages,String)
+EndTable
+
+'**************
+'FILE INCLUDES:
+'**************
+Include "CPU:subroutines_JSON.CRB"
+Include "CPU:subroutines_Networking.CRB"
+Include "CPU:subroutines_Main.CRB"
+
+BeginProg
+
+  '**************
+  'SETUP SECTION:
+  '**************
+  'Turn on sensor port and allow sensor to power up
+  PortSet(7,1)
+  Delay(1,5,Sec)
+  inStartup = False
+
+  '**********
+  'MAIN SCAN:
+  '**********
+  'Every 10 sec, get a new instantaneous reading from the sensor and send it via MQTT
+  'Every 20 mins, compile the data from the seagull table and send it to JSON
+  Scan (10,Sec,1,0)
+    If NOT(inStartup)
+      
+      'Start-of-loop timing tasks:
+      ' - If it is the start of a new interval, set the datalogging timestamp
+      ' - If we are at the appropriate time w/in an interval, start averaging data
+      ' - Flag if we are at the end of a new interval
+      If newReportingInterval
+        print("New data reporting interval")
+        DataTimestampUNIX = Public.Timestamp(UNIX_TIME_SETTING,1)
+        newReportingInterval = False
+      EndIf
+      If TimeIntoInterval(12,DATA_REPORTING_INTERVAL_MIN,min) AND NOT(compilingSeagullAvg)
+        print("Starting averaging for seagull data")
+        compilingSeagullAvg = True
+        seagullTableAveragingDone = False
+      EndIf
+      endReportingInterval = TimeIntoInterval(0, DATA_REPORTING_INTERVAL_MIN, min)
+
+      'Retrieve data:
+      print("Talking to Lufft Weather Station")
+      SDI12Recorder(WS800_Data(), C1, "1", "M!", 1, 0)
+      SDI12Recorder(WS800_Data_2(), C1, "1", "M7!", 1, 0)
+      SolarRadiation = _SolarRadiation
+      
+      'MQTT comms:
+      print("Sending over MQTT")
+      CallTable(WSData)
+
+      'Seagull averaging:      
+      If compilingSeagullAvg Then CallTable(SeagullDataTable)
+
+      'End-of-loop timing tasks:
+      If endReportingInterval
+        print("End of reporting interval")
+        newReportingInterval = True
+        If firstReportingInterval
+          firstReportingInterval = False
+        Else
+          seagullTableAveragingDone = True
+          jsonWriteTimestampUNIX = DataTimestampUNIX
+        EndIf
+      EndIf
+
+    EndIf
+  NextScan
+
+  'Seagull data delivery scan
+  'Check every 10 sec whether or not a data file is ready
+  'If it is attempt to send it to Seagull
+  SlowSequence
+  Scan(10,Sec,1,0)
+
+    'Writing the JSON file:
+    If seagullTableAveragingDone
+      print("Building JSON")
+      Include "CPU:buildJSON.CRB"
+      jsonReadyForUpload = True
+      seagullTableAveragingDone = False
+    EndIf
+
+    'Send to Seagull:
+    If jsonReadyForUpload
+      print("Uploading JSON")
+      'uploadJSONToSeagull(@jsonUploadSuccessful, jsonFileWriteName)
+      If jsonUploadSuccessful
+        jsonReadyForUpload = False
+      EndIf
+    EndIf
+  NextScan
+  EndSequence
+
+EndProg
