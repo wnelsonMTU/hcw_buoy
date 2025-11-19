@@ -5,19 +5,27 @@ Function uploadJSONToSeagull(_uploadCandidateUploadSuccessful As Long!, _uploadC
   
   'Set local variables (http, and json file stuff)
   Dim _uploadCandidateFileHandle As Long = 0
+  Dim _numBytesRead As Long = 0
 
   'Erase things
   http_header = Trim(SEAGULL_API_KEY_PREFIX & SEAGULL_API_KEY)
   Erase(jsonUpldStr)
   
   'Read the file
-  _uploadCandidateFileHandle = FileOpen(_uploadCandidateFileName,"r+",0)
-  FileRead(_uploadCandidateFileHandle,jsonUpldStr,JSON_MAX_CHAR_SIZE)
+  _uploadCandidateFileHandle = FileOpen(_uploadCandidateFileName,"r",0)
+  _numBytesRead = FileRead(_uploadCandidateFileHandle,jsonUpldStr,JSON_MAX_CHAR_SIZE)
   FileClose(_uploadCandidateFileHandle)
-  'jsonUpldStr = Trim(jsonUpldStr)
+
+  'Print some stuff for debugging
+  print("FileRead Read " + _numBytesRead + " bytes")
 
   'Upload the data to Seagull API & check if it was successful
   http_socket = HTTPPost(SEAGULL_API_ENDPOINT_URL,jsonUpldStr,http_post_response,http_header,,,,,FILE_UPLOAD_TIMEOUT)
   !_uploadCandidateUploadSuccessful = InStr(1, http_post_response, SEAGULL_API_SUCCESS_STRING, 2) 'OBVIOUSLY DO SOMETHING HERE!
+
+  'Print MORE stuff for debugging
+  print(http_socket)
+  print(http_post_response)
+  print(http_header)
   
 EndSub

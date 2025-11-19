@@ -3,10 +3,10 @@
 '******************
 
 'Program configuration:
-Const DEBUG_MODE_ENABLED = True
+Const DEBUG_MODE_ENABLED = False
 Const DATA_REPORTING_INTERVAL_MIN = 20
 Const UNIX_TIME_SETTING = 0 'Set to 1 for 1990, set to 0 since 1970'
-Const StationNumber = "45025"
+Const StationNumber = "HANCOCKWX"
 
 'Seagull API:
 #If DEBUG_MODE_ENABLED
@@ -21,7 +21,7 @@ Const SEAGULL_API_SUCCESS_STRING = "{" & CHR(34) & "success" & CHR(34) & ":true}
 Const FILE_UPLOAD_TIMEOUT = 4500
 
 'JSON:
-Const JSON_MAX_CHAR_SIZE = 512
+Const JSON_MAX_CHAR_SIZE = 4096
 
 'Debug Messages:
 Const BUOY_HISTORY_SIZE = 16
@@ -80,7 +80,7 @@ Public fileWriteHandle = 0
 Public jsonFileWriteName As String * 32 = ""
 Public JsonNodeString As String * 16 = ""
 Public filePrintString As String * 128 = ""
-Public jsonUpldStr As String * JSON_MAX_CHAR_SIZE = ""
+Public jsonUpldStr As String * JSON_MAX_CHAR_SIZE
 
 'Network variables:
 Public http_header As String * 64 = ""
@@ -94,11 +94,11 @@ Public http_socket As Long = 0
 DataTable (WSData,1,50)
   DataInterval (0,10,Sec,10)
   Sample (10,WS800_Data,FP2)
-  MQTTPublishTable(0,1,0,Sec,1)
+  'MQTTPublishTable(0,1,0,Sec,1)
 EndTable
 
 'Seagull publishing data table
-DataTable (SeagullDataTable,1,-1)
+DataTable (SeagullDataTable,endReportingInterval,-1)
   'Wind
   Sample(1,WindSpeed_mps,Float)
   FieldNames("WindSpeed_mps: Wind Speed")
@@ -124,9 +124,9 @@ EndTable
 '**************
 'FILE INCLUDES:
 '**************
+Include "CPU:subroutines_Main.CRB"
 Include "CPU:subroutines_JSON.CRB"
 Include "CPU:subroutines_Networking.CRB"
-Include "CPU:subroutines_Main.CRB"
 
 BeginProg
 
@@ -169,7 +169,7 @@ BeginProg
       SolarRadiation = _SolarRadiation
       
       'MQTT comms:
-      print("Sending over MQTT")
+      'print("Sending over MQTT")
       CallTable(WSData)
 
       'Seagull averaging:      
@@ -207,8 +207,10 @@ BeginProg
     'Send to Seagull:
     If jsonReadyForUpload
       print("Uploading JSON")
-      'uploadJSONToSeagull(@jsonUploadSuccessful, jsonFileWriteName)
+      uploadJSONToSeagull(@jsonUploadSuccessful, jsonFileWriteName)
+      print(http_post_response)
       If jsonUploadSuccessful
+        print("JSON upload successful!")
         jsonReadyForUpload = False
       EndIf
     EndIf

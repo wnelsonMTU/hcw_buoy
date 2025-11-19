@@ -64,8 +64,8 @@ PrintObsToJSON(SeagullDataTable.WindDir_deg,        "wind_from_direction",      
 PrintObsToJSON(SeagullDataTable.WindSpeed_mps,          "wind_speed",             filePrintString, fileWriteHandle)
 PrintObsToJSON(SeagullDataTable.AirTemp_C + 273.15,     "air_temperature",        filePrintString, fileWriteHandle)
 PrintObsToJSON(SeagullDataTable.RelHumidity,   "relative_humidity",      filePrintString, fileWriteHandle)
-PrintObsToJSON(SeagullDataTable.BaroPressure_kPa*100, "air_pressure_at_mean_sea_level",    filePrintString, fileWriteHandle)
-PrintObsToJSON(SeagullDataTable.SolarRadiation,     "surface_downwelling_shortwave_flux_in_air",        filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.BaroPressure_kPa*100, "air_pressure",    filePrintString, fileWriteHandle)
+PrintObsToJSON(SeagullDataTable.SolarRadiation,     "surface_downwelling_shortwave_flux_in_air",        filePrintString, fileWriteHandle, false)
 
 'Print ending sequence to close off all brackets
 FileWrite(fileWriteHandle,"]}]",0)
